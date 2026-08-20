@@ -95,6 +95,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Debug - decode the actual OIDC token claims
+        # Temporary diagnostic step. Prints exactly what GitHub is sending
+        # AWS for this run - sub, aud, repository, repository_owner, ref -
+        # so the IAM trust policy can be checked against the REAL value
+        # instead of what we assume it should be. Safe to remove once the
+        # OIDC assume-role issue is resolved; nothing here is sensitive, the
+        # token itself is short-lived and scoped only to this one job run.
+        run: |
+          JWT=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          echo "$JWT" | cut -d '.' -f2 | base64 -d 2>/dev/null | jq '{sub, aud, repository, repository_owner, ref, actor}'
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
