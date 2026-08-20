@@ -1,0 +1,21 @@
+{
+  "name": "kubeforge-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KubeForge frontend - minimal static UI served by a tiny Express static server",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "lint": "eslint .",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1",
+    "globals": "^17.11.0"
+  }
+}

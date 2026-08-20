@@ -1,0 +1,26 @@
+# kind (Kubernetes in Docker) cluster config for local development.
+#
+# The port mappings + node-labels here are the standard pattern for running
+# ingress-nginx on kind: kind's control-plane node is itself a Docker
+# container with no cloud load balancer in front of it, so ingress-nginx's
+# Service is set to hostNetwork-style behavior via NodePort + these explicit
+# host port mappings instead. Without this, there is no way to reach an
+# Ingress-routed Service from outside the cluster on kind.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kubeforge
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP

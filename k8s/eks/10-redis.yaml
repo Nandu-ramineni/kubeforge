@@ -1,0 +1,51 @@
+# Local-only stand-in for ElastiCache, same reasoning as postgres above.
+# STILL SELF-HOSTED HERE ON REAL EKS TOO: Phase 5's Terraform only built an
+# RDS module, deliberately no ElastiCache module (matching the module list
+# actually specified for this phase). Postgres has a real managed
+# replacement (RDS) as of this phase; Redis does not yet. Revisit this if a
+# later phase adds ElastiCache - until then this Deployment is what backs
+# the cache-aside pattern in services/api/src/redis.js, same as local dev.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: kubeforge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: kubeforge
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379

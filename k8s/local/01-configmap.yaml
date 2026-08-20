@@ -1,0 +1,22 @@
+# Only values that are actually the same across every service that uses them
+# belong here. PORT and HEALTH_PORT are deliberately NOT in this ConfigMap
+# even though they look like "config" - api listens on 3000 and frontend
+# listens on 3002, both reading a variable literally named PORT from their
+# own code. If both containers pulled PORT from one shared ConfigMap, one of
+# them would end up listening on the wrong port. Each Deployment below sets
+# its own PORT/HEALTH_PORT directly instead - a container-specific fact, not
+# shared configuration.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubeforge-config
+  namespace: kubeforge
+data:
+  LOG_LEVEL: "info"
+  TASK_QUEUE_NAME: "tasks.process"
+  TASK_CACHE_TTL_SECONDS: "30"
+  QUEUE_PREFETCH: "5"
+  # In-cluster Postgres here has no TLS listener at all - explicitly false
+  # (not just relying on the code default) so this is documented, not
+  # implicit. Compare k8s/eks/01-configmap.yaml, where this is "true".
+  DB_SSL: "false"

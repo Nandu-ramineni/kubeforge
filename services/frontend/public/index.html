@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>KubeForge</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main>
+    <h1>KubeForge</h1>
+    <p class="subtitle">Create a task, watch it move from <code>pending</code> to <code>completed</code> as the worker processes it asynchronously.</p>
+
+    <form id="task-form">
+      <input id="title" type="text" placeholder="Task title" required />
+      <button type="submit">Create Task</button>
+    </form>
+
+    <ul id="task-list"></ul>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

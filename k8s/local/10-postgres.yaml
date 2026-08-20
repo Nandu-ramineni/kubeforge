@@ -1,0 +1,56 @@
+# Local-only stand-in for RDS. There is no managed Postgres to point at until
+# Phase 6 provisions real RDS via Terraform, so for kind we run Postgres as a
+# plain in-cluster Deployment instead. No PersistentVolumeClaim on purpose -
+# this is disposable dev data; losing it on pod restart is fine and expected,
+# unlike the real RDS instance that shows up later.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: kubeforge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: kubeforge
+            - name: POSTGRES_PASSWORD
+              value: kubeforge
+            - name: POSTGRES_DB
+              value: kubeforge
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "kubeforge"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: kubeforge
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

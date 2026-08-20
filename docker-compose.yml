@@ -1,0 +1,68 @@
+# Full local stack for verifying the Dockerfiles end-to-end before moving to
+# Kubernetes in Phase 4. RabbitMQ is NOT run as a container here - api and
+# worker both connect out to a managed cloud broker via RABBITMQ_URL, the
+# same way they will in every real environment. Set RABBITMQ_URL in a .env
+# file at the repo root (docker compose auto-loads it for variable
+# substitution below) before running `docker compose up --build`.
+version: '4.86'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kubeforge
+      POSTGRES_PASSWORD: kubeforge
+      POSTGRES_DB: kubeforge
+    ports:
+      - '5432:5432'
+    volumes:
+      - kubeforge_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U kubeforge']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: ./services/api
+    environment:
+      DATABASE_URL: postgres://kubeforge:kubeforge@postgres:5432/kubeforge
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: ${RABBITMQ_URL:?RABBITMQ_URL must be set in a root .env file - see docs/architecture.md}
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: ./services/worker
+    environment:
+      DATABASE_URL: postgres://kubeforge:kubeforge@postgres:5432/kubeforge
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: ${RABBITMQ_URL:?RABBITMQ_URL must be set in a root .env file - see docs/architecture.md}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./services/frontend
+    ports:
+      - '3002:3002'
+
+volumes:
+  kubeforge_pgdata:

@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: kubeforge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          # :local is loaded straight into the kind node via `kind load
+          # docker-image` - it is never pulled from a registry, which is why
+          # imagePullPolicy below is Never rather than the default
+          # IfNotPresent/Always. If this were left as the default, a typo'd
+          # tag or a stale image would fail with a confusing ImagePullBackOff
+          # instead of clearly telling you the image just isn't loaded.
+          image: kubeforge-api:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+          envFrom:
+            - configMapRef:
+                name: kubeforge-config
+            - secretRef:
+                name: kubeforge-secrets
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: kubeforge
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 3000
+      targetPort: 3000

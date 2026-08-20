@@ -1,0 +1,129 @@
+# CI only - this pipeline stops at pushing images to ECR. It deliberately
+# does NOT deploy anything to the cluster; that's Phase 8's job (Argo CD /
+# GitOps), which watches for new image tags and syncs the cluster to match,
+# rather than CI reaching into the cluster directly.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least-privilege default for the whole workflow - individual jobs opt into
+# more (id-token: write) only where actually needed for OIDC.
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint & Test (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, worker, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/${{ matrix.service }}
+        run: npm ci
+
+      - name: Lint
+        working-directory: services/${{ matrix.service }}
+        run: npm run lint
+
+      - name: Test
+        working-directory: services/${{ matrix.service }}
+        run: npm test
+
+  security-scan:
+    name: Dependency Scan (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, worker, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/${{ matrix.service }}
+        run: npm ci
+
+      - name: npm audit (high/critical only)
+        # Low-severity transitive vulnerabilities are extremely common and
+        # shouldn't block every single build - only high/critical fail here.
+        working-directory: services/${{ matrix.service }}
+        run: npm audit --audit-level=high
+
+  gitleaks:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks needs full history, not just the latest commit
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-scan-push:
+    name: Build, Scan & Push (${{ matrix.service }})
+    needs: [lint-and-test, security-scan, gitleaks]
+    # Only pushes on an actual merge to main - a PR (even from a branch in
+    # this same repo) never reaches this job, so it never needs ECR access.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # required for OIDC -> AWS, nothing else needs it
+      contents: read
+    strategy:
+      matrix:
+        service: [api, worker, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build image
+        working-directory: services/${{ matrix.service }}
+        run: |
+          docker build \
+            -t ${{ steps.ecr-login.outputs.registry }}/kubeforge-${{ matrix.service }}:${{ github.sha }} \
+            .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.ecr-login.outputs.registry }}/kubeforge-${{ matrix.service }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: '1' # fail the job - never push an image with a known high/critical CVE
+
+      - name: Push image
+        run: docker push ${{ steps.ecr-login.outputs.registry }}/kubeforge-${{ matrix.service }}:${{ github.sha }}
+
+      # Tagged with the full commit SHA only - never :latest (see
+      # docs/architecture.md Section 10). ECR's repos are also set to
+      # IMMUTABLE tag mutability (Phase 5), so re-pushing the same tag would
+      # be rejected outright even if something tried to - this is the
+      # infra-level enforcement of the same policy, not just a convention.

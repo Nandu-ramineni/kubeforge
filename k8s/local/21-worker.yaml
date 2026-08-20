@@ -1,0 +1,54 @@
+# No Service object for the worker - it's a queue consumer, not something
+# other pods send requests to, so there's nothing for a Service to route.
+# Kubernetes probes hit a pod's own IP:port directly regardless of whether a
+# Service exists, so readiness/liveness still work fine without one. (A
+# Service does become useful later for Prometheus scraping in Phase 11 - a
+# headless Service or a PodMonitor, not a routable ClusterIP.)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: kubeforge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: kubeforge-worker:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3001
+          env:
+            - name: HEALTH_PORT
+              value: "3001"
+          envFrom:
+            - configMapRef:
+                name: kubeforge-config
+            - secretRef:
+                name: kubeforge-secrets
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

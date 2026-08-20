@@ -1,0 +1,107 @@
+locals {
+  name = "kubeforge-${var.environment}"
+
+  common_tags = {
+    Project     = "kubeforge"
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}
+
+module "vpc" {
+  source = "../../modules/vpc"
+
+  name               = local.name
+  vpc_cidr           = var.vpc_cidr
+  azs                = var.azs
+  single_nat_gateway = var.single_nat_gateway
+  tags               = local.common_tags
+}
+
+module "ecr" {
+  source = "../../modules/ecr"
+
+  repository_names           = var.ecr_repository_names
+  max_tagged_images_per_repo = var.ecr_max_tagged_images
+  tags                       = local.common_tags
+}
+
+module "iam" {
+  source = "../../modules/iam"
+
+  name                = local.name
+  enable_github_oidc  = var.enable_github_oidc
+  github_org          = var.github_org
+  github_repo         = var.github_repo
+  ecr_repository_arns = module.ecr.repository_arns
+  tags                = local.common_tags
+}
+
+module "eks" {
+  source = "../../modules/eks"
+
+  cluster_name           = local.name
+  kubernetes_version     = var.kubernetes_version
+  cluster_role_arn       = module.iam.eks_cluster_role_arn
+  node_role_arn          = module.iam.eks_node_role_arn
+  private_subnet_ids     = module.vpc.private_subnet_ids
+  public_subnet_ids      = module.vpc.public_subnet_ids
+  endpoint_public_access = var.eks_endpoint_public_access
+  node_instance_types    = var.eks_node_instance_types
+  node_capacity_type     = var.eks_node_capacity_type
+  node_desired_size      = var.eks_node_desired_size
+  node_min_size          = var.eks_node_min_size
+  node_max_size          = var.eks_node_max_size
+  tags                   = local.common_tags
+}
+
+module "rds" {
+  source = "../../modules/rds"
+
+  name                           = local.name
+  vpc_id                         = module.vpc.vpc_id
+  private_subnet_ids             = module.vpc.private_subnet_ids
+  eks_cluster_security_group_id  = module.eks.cluster_security_group_id
+  engine_version                 = var.rds_engine_version
+  instance_class                 = var.rds_instance_class
+  allocated_storage              = var.rds_allocated_storage
+  multi_az                       = var.rds_multi_az
+  backup_retention_period        = var.rds_backup_retention_period
+  deletion_protection            = var.rds_deletion_protection
+  skip_final_snapshot            = var.rds_skip_final_snapshot
+  tags                           = local.common_tags
+}
+
+module "s3" {
+  source = "../../modules/s3"
+
+  bucket_name        = "${local.name}-app-${data.aws_caller_identity.current.account_id}"
+  versioning_enabled = true
+  expire_after_days  = var.s3_expire_after_days
+  tags               = local.common_tags
+}
+
+# --- AWS Load Balancer Controller IRSA role ---
+# The controller itself is installed via Helm (Phase 6 documentation, not
+# Terraform - it's a cluster addon, not infrastructure) but the IAM role it
+# needs to actually create/manage ALBs on your behalf has to exist first,
+# and that's IAM, so it belongs here. The policy JSON is fetched verbatim
+# from the upstream project (policies/aws-load-balancer-controller-policy.json)
+# rather than hand-copied, so it stays exactly in sync with what the
+# controller's own documentation specifies.
+module "irsa_aws_lb_controller" {
+  source = "../../modules/irsa"
+
+  name                 = "${local.name}-aws-lb-controller"
+  oidc_provider_arn    = module.eks.oidc_provider_arn
+  oidc_provider_url    = module.eks.oidc_provider_url
+  namespace            = "kube-system"
+  service_account_name = "aws-load-balancer-controller"
+  policy_json          = file("${path.module}/policies/aws-load-balancer-controller-policy.json")
+  tags                 = local.common_tags
+}
+
+# S3 bucket names are globally unique across ALL AWS accounts - suffixing
+# with the account ID avoids a name collision with someone else's bucket
+# without you having to hand-pick a unique name yourself.
+data "aws_caller_identity" "current" {}

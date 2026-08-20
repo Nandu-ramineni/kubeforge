@@ -1,0 +1,29 @@
+# Simpler than the original version of this file: api's routes are now
+# mounted at /api/* directly (see services/api/src/index.js), so this Ingress
+# just forwards paths as-is - no rewrite-target, no regex capture groups.
+# This also makes local (nginx-ingress) and EKS (ALB, Phase 6) behave
+# identically, since ALB has no equivalent rewrite mechanism to rely on.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubeforge
+  namespace: kubeforge
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 3000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3002

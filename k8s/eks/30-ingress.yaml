@@ -1,0 +1,39 @@
+# Provisions a real Application Load Balancer via the AWS Load Balancer
+# Controller (installed via Helm - see docs/eks-deployment.md - not
+# Terraform, since it's a cluster addon rather than infrastructure).
+#
+# healthcheck-path is set once, at the Ingress level, and applies to every
+# backend's target group. It's /health/live specifically because that path
+# is mounted unprefixed and identically on BOTH api and frontend (see
+# services/api/src/index.js's comment on the dual health mount) - a single
+# shared health check path across every target group behind one ALB, with no
+# per-backend overrides needed.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubeforge
+  namespace: kubeforge
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /health/live
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 3000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3002

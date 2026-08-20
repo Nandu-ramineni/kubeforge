@@ -1,0 +1,27 @@
+{
+  "name": "kubeforge-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KubeForge worker - consumes RabbitMQ tasks.process queue and does background work",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "lint": "eslint .",
+    "test": "node --env-file=.env.test --test"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "dotenv": "^16.4.5",
+    "pg": "^8.11.5",
+    "pino": "^9.2.0",
+    "prom-client": "^15.1.3",
+    "redis": "^4.6.14"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1",
+    "globals": "^17.11.0"
+  }
+}
