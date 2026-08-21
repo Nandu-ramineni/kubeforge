@@ -10,4 +10,4 @@
 
 image:
   registry: "381492249826.dkr.ecr.us-east-1.amazonaws.com"
-  tag: "manual"
+  tag: "ec44854ef1b20d254c371a4eea241ca27ef8ff10"
