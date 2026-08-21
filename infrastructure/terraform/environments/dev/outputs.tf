@@ -20,6 +20,11 @@ output "aws_lb_controller_role_arn" {
   description = "Set as eks.amazonaws.com/role-arn on the aws-load-balancer-controller ServiceAccount when installing via Helm"
 }
 
+output "cluster_autoscaler_role_arn" {
+  value       = module.irsa_cluster_autoscaler.role_arn
+  description = "Set as eks.amazonaws.com/role-arn on the cluster-autoscaler ServiceAccount when installing via Helm"
+}
+
 output "vpc_id_for_lb_controller" {
   value       = module.vpc.vpc_id
   description = "Passed as --set vpcId=... in the AWS Load Balancer Controller Helm install"

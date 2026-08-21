@@ -63,6 +63,11 @@ services:
     needsRedisEgress: true
     needsRdsEgress: true
     needsRabbitmqEgress: true
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
     extraEnv:
       PORT: "3000"
     resources:
@@ -80,6 +85,18 @@ services:
     needsRedisEgress: true
     needsRdsEgress: true
     needsRabbitmqEgress: true
+    autoscaling:
+      # Not CPU-based-scalable in any meaningful way right now - worker's
+      # simulated work (services/worker/src/index.js) is a setTimeout, not
+      # actual computation, so it never drives CPU usage regardless of queue
+      # depth. A real signal for scaling worker would be RabbitMQ queue
+      # depth itself, which needs a custom metrics adapter (e.g. KEDA) -
+      # legitimate future work, not implemented here since CPU-based HPA
+      # would just never trigger and give a false sense of coverage.
+      enabled: false
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
     extraEnv:
       HEALTH_PORT: "3001"
     resources:
@@ -97,6 +114,11 @@ services:
     needsRedisEgress: false
     needsRdsEgress: false
     needsRabbitmqEgress: false
+    autoscaling:
+      enabled: false # static file serving is cheap enough that 2 fixed replicas comfortably cover realistic load
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
     extraEnv:
       PORT: "3002"
     resources:

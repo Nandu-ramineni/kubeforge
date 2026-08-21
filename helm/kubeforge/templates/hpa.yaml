@@ -1,0 +1,36 @@
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  scaleTargetRef:
+    {{- if $svc.useRollout }}
+    # HPA can target a Rollout directly - Argo Rollouts implements the same
+    # /scale subresource a Deployment does, specifically so HPA works
+    # unmodified against it. HPA changes the overall desired replica COUNT;
+    # the Rollout's own canary steps (templates/rollout.yaml) then decide
+    # how that total is split between the stable and canary ReplicaSets -
+    # the two features compose correctly without any special wiring here.
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    {{- end }}
+    {{- if not $svc.useRollout }}
+    apiVersion: apps/v1
+    kind: Deployment
+    {{- end }}
+    name: {{ $name }}
+  minReplicas: {{ $svc.autoscaling.minReplicas }}
+  maxReplicas: {{ $svc.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $svc.autoscaling.targetCPUUtilizationPercentage }}
+---
+{{- end }}
+{{- end }}

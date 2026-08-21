@@ -103,6 +103,28 @@ module "irsa_aws_lb_controller" {
   tags                 = local.common_tags
 }
 
+# Cluster Autoscaler IRSA role. Note what's NOT here: any tagging of the EKS
+# node group's underlying Auto Scaling Group. AWS's own docs confirm managed
+# node groups are automatically tagged for Cluster Autoscaler discovery the
+# moment they're created (k8s.io/cluster-autoscaler/enabled,
+# k8s.io/cluster-autoscaler/<cluster-name>) - checked this specifically
+# rather than assume, since it directly determines whether this phase needed
+# any changes to modules/eks at all. It didn't - only this IAM role, for the
+# Cluster Autoscaler POD itself to have permission to call the ASG/EC2 APIs.
+module "irsa_cluster_autoscaler" {
+  source = "../../modules/irsa"
+
+  name                 = "${local.name}-cluster-autoscaler"
+  oidc_provider_arn    = module.eks.oidc_provider_arn
+  oidc_provider_url    = module.eks.oidc_provider_url
+  namespace            = "kube-system"
+  service_account_name = "cluster-autoscaler"
+  policy_json = templatefile("${path.module}/policies/cluster-autoscaler-policy.json", {
+    cluster_name = local.name
+  })
+  tags = local.common_tags
+}
+
 # S3 bucket names are globally unique across ALL AWS accounts - suffixing
 # with the account ID avoids a name collision with someone else's bucket
 # without you having to hand-pick a unique name yourself.
