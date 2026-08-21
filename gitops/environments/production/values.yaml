@@ -1,0 +1,9 @@
+# Not yet in active use - see gitops/environments/staging/values.yaml for
+# the same reasoning. Production's Argo CD Application (once created) should
+# also disable automated selfHeal initially, or at minimum require manual
+# sync approval - auto-syncing straight to production the moment a commit
+# lands is a deliberate, separate decision from dev's fully-automated setup,
+# not a default to inherit silently.
+image:
+  registry: ""
+  tag: "manual"

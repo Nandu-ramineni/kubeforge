@@ -1,0 +1,46 @@
+# Applied once, manually (kubectl apply -f), to bootstrap Argo CD's
+# knowledge of this app - not something Helm or Terraform manages, since
+# it's Argo CD's own config, not application infrastructure. After this one
+# apply, Argo CD owns the sync loop from here on: every push to main that
+# updates gitops/environments/dev/values.yaml's image.tag (via CI's
+# update-gitops job) gets picked up and synced automatically, no further
+# kubectl needed.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubeforge-dev
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    # Replace with your actual repo URL before applying.
+    repoURL: https://github.com/Nandu-ramineni/kubeforge.git
+    targetRevision: main
+    path: helm/kubeforge
+    helm:
+      valueFiles:
+        # Relative to the chart path (helm/kubeforge), not the repo root -
+        # confirmed working in current Argo CD versions for same-repo files
+        # outside the chart directory. If this specific Argo CD version ever
+        # rejects it, the documented fallback is a multi-source Application
+        # with a $values ref instead of a relative path.
+        - ../../gitops/environments/dev/values.yaml
+
+  destination:
+    server: https://kubernetes.default.svc # the same cluster Argo CD itself runs on
+    namespace: kubeforge
+
+  syncPolicy:
+    automated:
+      # prune: removes resources that exist on the cluster but are no longer
+      # defined in Git - e.g. if a Deployment is deleted from the chart.
+      prune: true
+      # selfHeal: this is the actual drift-correction mechanism Section 11
+      # asks for. If someone runs `kubectl edit deployment/api` directly
+      # against the cluster, Argo CD notices the live state no longer
+      # matches Git and reverts it automatically - Git stays the single
+      # source of truth, not whatever's currently running.
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false # the chart's own namespace.yaml template handles this

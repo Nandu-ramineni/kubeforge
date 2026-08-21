@@ -1,0 +1,80 @@
+# Defaults. gitops/environments/<env>/values.yaml overrides only what's
+# actually different per environment (mainly image.registry and image.tag -
+# see that file's own comments for why those two specifically live outside
+# this chart).
+
+namespace: kubeforge
+
+image:
+  registry: "" # set per environment - the ECR registry host
+  tag: "manual" # overwritten by CI's GitOps commit (see .github/workflows/ci.yml's update-gitops job)
+  pullPolicy: IfNotPresent
+
+config:
+  logLevel: info
+  taskQueueName: tasks.process
+  taskCacheTtlSeconds: "30"
+  queuePrefetch: "5"
+  # true for real EKS + RDS (RDS enforces SSL). Local kind dev still uses the
+  # raw k8s/local manifests directly, not this chart, so this default only
+  # ever needs to be true here - see services/api/src/config.js and
+  # services/api/src/db.js for what actually consumes this.
+  dbSsl: "true"
+
+redis:
+  enabled: true # in-cluster stand-in for ElastiCache - no ElastiCache module exists yet (Phase 5)
+  image: redis:7-alpine
+  port: 6379
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    # Shared across every backend behind this one ALB - see
+    # services/api/src/index.js's comment on the dual /health mount for why
+    # this single path works identically for api and frontend.
+    alb.ingress.kubernetes.io/healthcheck-path: /health/live
+
+# One entry per service. templates/deployment.yaml ranges over this map so
+# there is exactly one Deployment/Service template shared by all three,
+# rather than three near-identical copies that would inevitably drift out
+# of sync with each other over time.
+services:
+  api:
+    port: 3000
+    replicas: 2
+    createService: true
+    needsConfig: true
+    needsSecret: true
+    extraEnv:
+      PORT: "3000"
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits: { cpu: 500m, memory: 256Mi }
+
+  worker:
+    port: 3001
+    replicas: 2
+    createService: false # queue consumer only, nothing routes to it via a Service
+    needsConfig: true
+    needsSecret: true
+    extraEnv:
+      HEALTH_PORT: "3001"
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits: { cpu: 500m, memory: 256Mi }
+
+  frontend:
+    port: 3002
+    replicas: 2
+    createService: true
+    needsConfig: false # no dependency env vars needed at all
+    needsSecret: false
+    extraEnv:
+      PORT: "3002"
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { cpu: 200m, memory: 128Mi }

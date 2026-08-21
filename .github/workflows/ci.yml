@@ -139,3 +139,40 @@ jobs:
       # IMMUTABLE tag mutability (Phase 5), so re-pushing the same tag would
       # be rejected outright even if something tried to - this is the
       # infra-level enforcement of the same policy, not just a convention.
+
+  update-gitops:
+    name: Update GitOps config
+    # Waits for every matrix job of build-scan-push (api, worker, frontend)
+    # to finish - all three share one image tag (github.sha), so this only
+    # needs to run once, not once per service.
+    needs: build-scan-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needs to push a commit back to this same repo
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump image tag in GitOps config
+        run: |
+          sed -i "s/^  tag:.*/  tag: \"${{ github.sha }}\"/" gitops/environments/dev/values.yaml
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add gitops/environments/dev/values.yaml
+          # [skip ci] on the commit message stops this push from
+          # re-triggering the whole pipeline pointlessly - GitHub Actions
+          # natively honors this in the commit message, no extra config
+          # needed. The `git diff --cached --quiet ||` guard also means a
+          # re-run of this exact commit (e.g. a manual re-run) produces no
+          # diff and correctly commits nothing a second time.
+          git diff --cached --quiet || git commit -m "Deploy ${{ github.sha }} to dev [skip ci]"
+          git push
+
+      # This commit is the actual trigger Argo CD is watching for - not
+      # anything about the image existing in ECR. The full loop, per
+      # docs/architecture.md Section 11's diagram:
+      #   Developer -> GitHub -> GitHub Actions -> Docker Image -> ECR
+      #     -> GitOps Repository (this commit) -> Argo CD -> EKS

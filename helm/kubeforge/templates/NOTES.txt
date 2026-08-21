@@ -1,0 +1,19 @@
+KubeForge deployed to namespace: {{ .Values.namespace }}
+
+IMPORTANT: this chart does NOT create the `kubeforge-secrets` Secret. That's
+deliberate - it holds the real RDS password fetched live from AWS Secrets
+Manager, which is not something a Helm values file should ever hold. Run
+this first (or the api/worker pods will sit in CreateContainerConfigError):
+
+  scripts/create-eks-secret.sh
+
+Check rollout status:
+
+  kubectl get pods -n {{ .Values.namespace }}
+
+{{- if .Values.ingress.enabled }}
+
+Once the ALB is provisioned (can take a few minutes):
+
+  kubectl get ingress kubeforge -n {{ .Values.namespace }}
+{{- end }}

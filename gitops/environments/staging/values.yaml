@@ -1,0 +1,7 @@
+# Not yet in active use - staging's EKS/ECR infrastructure hasn't been
+# applied (see infrastructure/terraform/environments/staging). Kept here so
+# the structure is ready the moment it is: point Argo CD at this file the
+# same way gitops/environments/dev/application.yaml points at dev's.
+image:
+  registry: "" # fill in once infrastructure/terraform/environments/staging has been applied
+  tag: "manual"

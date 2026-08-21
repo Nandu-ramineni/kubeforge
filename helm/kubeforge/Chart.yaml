@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kubeforge
+description: KubeForge - API/worker/frontend, in-cluster Redis, ALB Ingress
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

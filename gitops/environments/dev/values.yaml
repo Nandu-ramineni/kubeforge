@@ -1,0 +1,13 @@
+# Only overrides what's genuinely different for dev - everything else comes
+# from helm/kubeforge/values.yaml's defaults. Kept minimal on purpose: the
+# more that's duplicated here, the more places a change has to be made
+# consistently.
+#
+# image.tag is the one line in this whole repo that changes on every single
+# successful deploy - .github/workflows/ci.yml's update-gitops job rewrites
+# it automatically after a build passes Trivy and pushes to ECR. That commit
+# is what Argo CD is actually watching for.
+
+image:
+  registry: "381492249826.dkr.ecr.us-east-1.amazonaws.com"
+  tag: "manual"
