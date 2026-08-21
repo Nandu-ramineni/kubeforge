@@ -7,13 +7,26 @@ this first (or the api/worker pods will sit in CreateContainerConfigError):
 
   scripts/create-eks-secret.sh
 
+IMPORTANT (Phase 9): api is now an Argo Rollout, not a plain Deployment -
+the Argo Rollouts controller must be installed in the cluster BEFORE this
+chart is synced, or the `kind: Rollout` resource will fail to apply with an
+error about an unrecognized kind. See docs/production-hardening.md.
+
 Check rollout status:
 
   kubectl get pods -n {{ .Values.namespace }}
+  kubectl argo rollouts get rollout api -n {{ .Values.namespace }}
 
 {{- if .Values.ingress.enabled }}
 
 Once the ALB is provisioned (can take a few minutes):
 
   kubectl get ingress kubeforge -n {{ .Values.namespace }}
+{{- end }}
+
+{{- if .Values.networkPolicy.enabled }}
+
+NetworkPolicy is enforced - if something that used to work stops reaching a
+dependency, check `kubectl describe networkpolicy -n {{ .Values.namespace }}`
+before assuming it's an application bug.
 {{- end }}

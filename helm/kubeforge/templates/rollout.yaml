@@ -1,0 +1,52 @@
+# api uses Argo Rollouts (kind: Rollout) instead of a plain Deployment,
+# specifically so canary deployments are possible for the one service where
+# gradual rollout actually matters - it's the component serving real user
+# traffic through the ALB. worker and frontend stay as plain Deployments in
+# templates/deployment.yaml.
+#
+# This is "basic canary" - no traffic-management plugin (e.g. the ALB
+# trafficrouter plugin), so weight is approximated via the ratio of
+# canary-to-stable POD COUNT, not precise percentage-based request routing
+# at the load balancer. The Service below still selects on the same `app:
+# api` label as both the stable and canary ReplicaSets, so Kubernetes'
+# normal per-pod load distribution naturally approximates the requested
+# weight. A true weighted-traffic-split setup would need the ALB
+# trafficrouter plugin installed - noted as a real enhancement, not
+# implemented here, to keep this phase's scope to what's actually needed to
+# demonstrate the concept and trade-offs.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: api
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.services.api.replicas }}
+  selector:
+    matchLabels:
+      app: api
+  template:
+    {{- include "kubeforge.podTemplate" (dict "name" "api" "svc" .Values.services.api "root" $) | nindent 4 }}
+  strategy:
+    canary:
+      steps:
+        {{- range .Values.canary.steps }}
+        {{- if .setWeight }}
+        - setWeight: {{ .setWeight }}
+        {{- end }}
+        {{- if .pauseSeconds }}
+        - pause:
+            duration: {{ .pauseSeconds }}s
+        {{- end }}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: api
+  ports:
+    - port: {{ .Values.services.api.port }}
+      targetPort: {{ .Values.services.api.port }}

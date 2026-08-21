@@ -1,0 +1,19 @@
+# minAvailable: 1 with 2 replicas each - a node drain, cluster upgrade, or
+# any other VOLUNTARY disruption (kubectl drain, cluster-autoscaler scaling
+# down a node) can only take one replica of a service at a time, never both
+# simultaneously. This has no effect on involuntary disruptions (a node
+# crashing outright) - PDBs only ever govern disruptions initiated through
+# the Kubernetes eviction API, not hardware/node failures.
+{{- range $name, $svc := .Values.services }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: {{ $name }}
+---
+{{- end }}

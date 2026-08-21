@@ -1,0 +1,120 @@
+{{- if .Values.networkPolicy.enabled }}
+# Default deny-all baseline: nothing gets in or out of any pod in this
+# namespace unless a more specific policy below explicitly allows it.
+# NetworkPolicies are additive - this being "deny everything" is safe
+# precisely because every real, legitimate path each service actually uses
+# gets its own explicit allow rule below.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+{{- if .Values.redis.enabled }}
+# Only api and worker (both needsRedisEgress: true) can reach redis - not
+# frontend, not anything outside the namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-ingress
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        {{- range $name, $svc := .Values.services }}
+        {{- if $svc.needsRedisEgress }}
+        - podSelector:
+            matchLabels:
+              app: {{ $name }}
+        {{- end }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.redis.port }}
+---
+{{- end }}
+{{- range $name, $svc := .Values.services }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}-policy
+  namespace: {{ $.Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ $name }}
+  policyTypes: ["Ingress", "Egress"]
+  {{- if $svc.publicIngress }}
+  ingress:
+    # Traffic from the ALB arrives at the pod's IP via the VPC CNI - it does
+    # NOT come from another pod, so this can't be scoped with a podSelector
+    # the way the redis policy above is. This is intentionally open on the
+    # container port only (nothing else) - api and frontend are SUPPOSED to
+    # be publicly reachable, that's the entire point of having an Ingress in
+    # front of them. NetworkPolicy's real value for these two services is
+    # entirely on the egress side below, not restricting who can reach them.
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ $svc.port }}
+  {{- end }}
+  egress:
+    # DNS - every pod needs this for basic service discovery (resolving
+    # `redis`, and external hostnames for RDS/RabbitMQ).
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- if $svc.needsRedisEgress }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.redis.port }}
+    {{- end }}
+    {{- if $svc.needsRdsEgress }}
+    # RDS isn't a pod - there's no podSelector that could ever match it.
+    # Scoped to the VPC CIDR instead, which is the tightest boundary
+    # NetworkPolicy can actually express for a destination outside the
+    # cluster's own pod network. See values.yaml's networkPolicy.vpcCidr
+    # comment - this must match whatever environment this is actually
+    # deployed to.
+    - to:
+        - ipBlock:
+            cidr: {{ $.Values.networkPolicy.vpcCidr }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- end }}
+    {{- if $svc.needsRabbitmqEgress }}
+    # The cloud RabbitMQ broker's IP isn't knowable or stable in advance
+    # (DNS-based, provider-managed) - this is a real, honest limitation of
+    # plain Kubernetes NetworkPolicy for external SaaS dependencies. Scoped
+    # to the specific AMQPS port rather than left fully open, which is the
+    # practical middle ground: not "allow all egress", but also not
+    # something achievable to pin to an exact destination without a real
+    # network firewall or egress gateway in front of the cluster.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 5671
+    {{- end }}
+---
+{{- end }}
+{{- end }}

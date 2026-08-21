@@ -7,3 +7,5 @@
 image:
   registry: ""
   tag: "manual"
+networkPolicy:
+  vpcCidr: "10.2.0.0/16" # matches infrastructure/terraform/environments/production/terraform.tfvars

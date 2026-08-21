@@ -1,4 +1,5 @@
 {{- range $name, $svc := .Values.services }}
+{{- if not $svc.useRollout }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,46 +11,7 @@ spec:
     matchLabels:
       app: {{ $name }}
   template:
-    metadata:
-      labels:
-        app: {{ $name }}
-    spec:
-      containers:
-        - name: {{ $name }}
-          image: "{{ $.Values.image.registry }}/kubeforge-{{ $name }}:{{ $.Values.image.tag }}"
-          imagePullPolicy: {{ $.Values.image.pullPolicy }}
-          ports:
-            - containerPort: {{ $svc.port }}
-          env:
-            {{- range $key, $value := $svc.extraEnv }}
-            - name: {{ $key }}
-              value: {{ $value | quote }}
-            {{- end }}
-          {{- if or $svc.needsConfig $svc.needsSecret }}
-          envFrom:
-            {{- if $svc.needsConfig }}
-            - configMapRef:
-                name: kubeforge-config
-            {{- end }}
-            {{- if $svc.needsSecret }}
-            - secretRef:
-                name: kubeforge-secrets
-            {{- end }}
-          {{- end }}
-          readinessProbe:
-            httpGet:
-              path: /health/ready
-              port: {{ $svc.port }}
-            initialDelaySeconds: 5
-            periodSeconds: 5
-          livenessProbe:
-            httpGet:
-              path: /health/live
-              port: {{ $svc.port }}
-            initialDelaySeconds: 10
-            periodSeconds: 10
-          resources:
-            {{- toYaml $svc.resources | nindent 12 }}
+    {{- include "kubeforge.podTemplate" (dict "name" $name "svc" $svc "root" $) | nindent 4 }}
 ---
 {{- if $svc.createService }}
 apiVersion: v1
@@ -64,5 +26,6 @@ spec:
     - port: {{ $svc.port }}
       targetPort: {{ $svc.port }}
 ---
+{{- end }}
 {{- end }}
 {{- end }}

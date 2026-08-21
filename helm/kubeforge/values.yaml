@@ -33,15 +33,24 @@ ingress:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-    # Shared across every backend behind this one ALB - see
-    # services/api/src/index.js's comment on the dual /health mount for why
-    # this single path works identically for api and frontend.
     alb.ingress.kubernetes.io/healthcheck-path: /health/live
 
-# One entry per service. templates/deployment.yaml ranges over this map so
-# there is exactly one Deployment/Service template shared by all three,
-# rather than three near-identical copies that would inevitably drift out
-# of sync with each other over time.
+# NetworkPolicy egress to RDS is scoped to the VPC CIDR (RDS has no stable
+# pod identity to select on - it isn't a pod at all). This has to match
+# whatever environment this is actually deployed to - dev's is 10.0.0.0/16
+# per infrastructure/terraform/environments/dev/terraform.tfvars. staging/
+# production override this in their own gitops values (10.1.0.0/16,
+# 10.2.0.0/16) once those environments are actually applied.
+networkPolicy:
+  enabled: true
+  vpcCidr: "10.0.0.0/16"
+
+# One entry per service. templates/deployment.yaml and templates/rollout.yaml
+# both range over this map (Deployment for useRollout:false, Rollout for
+# useRollout:true) via a shared pod-spec named template
+# (templates/_helpers.tpl), so there's exactly one place each service's
+# container spec is actually defined regardless of which K8s resource kind
+# ends up wrapping it.
 services:
   api:
     port: 3000
@@ -49,6 +58,11 @@ services:
     createService: true
     needsConfig: true
     needsSecret: true
+    useRollout: true # canary deployments - api is the traffic-serving component where gradual rollout matters most
+    publicIngress: true # reachable from the ALB - see networkpolicy.yaml
+    needsRedisEgress: true
+    needsRdsEgress: true
+    needsRabbitmqEgress: true
     extraEnv:
       PORT: "3000"
     resources:
@@ -61,6 +75,11 @@ services:
     createService: false # queue consumer only, nothing routes to it via a Service
     needsConfig: true
     needsSecret: true
+    useRollout: false
+    publicIngress: false # nothing calls worker directly - it only ever initiates outbound connections
+    needsRedisEgress: true
+    needsRdsEgress: true
+    needsRabbitmqEgress: true
     extraEnv:
       HEALTH_PORT: "3001"
     resources:
@@ -73,8 +92,29 @@ services:
     createService: true
     needsConfig: false # no dependency env vars needed at all
     needsSecret: false
+    useRollout: false # static file serving only - the actual API traffic (where canary matters) goes to `api`, not through frontend
+    publicIngress: true
+    needsRedisEgress: false
+    needsRdsEgress: false
+    needsRabbitmqEgress: false
     extraEnv:
       PORT: "3002"
     resources:
       requests: { cpu: 50m, memory: 64Mi }
       limits: { cpu: 200m, memory: 128Mi }
+
+# api's canary strategy - time-based auto-promotion for now. Phase 11 (once
+# Prometheus/Grafana exist) is the natural place to replace the fixed pauses
+# below with AnalysisTemplate-driven promotion that checks real error-rate/
+# latency metrics before continuing each step, and rolls back automatically
+# if they regress - noted here rather than built now, since there's no
+# metrics source to analyze against yet.
+canary:
+  steps:
+    - setWeight: 5
+    - pauseSeconds: 60
+    - setWeight: 25
+    - pauseSeconds: 60
+    - setWeight: 50
+    - pauseSeconds: 60
+    - setWeight: 100
