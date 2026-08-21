@@ -16,6 +16,9 @@ COPY --chown=node:node package.json ./
 COPY --chown=node:node src ./src
 COPY --chown=node:node public ./public
 
+# See services/api/Dockerfile for the full explanation of why this is here.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
 USER node
 
 EXPOSE 3002

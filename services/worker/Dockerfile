@@ -21,6 +21,9 @@ COPY --from=deps --chown=node:node /rds-ca-bundle.pem ./rds-ca-bundle.pem
 COPY --chown=node:node package.json ./
 COPY --chown=node:node src ./src
 
+# See services/api/Dockerfile for the full explanation of why this is here.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
 USER node
 
 # The worker has no application API - this is only the health/metrics port.

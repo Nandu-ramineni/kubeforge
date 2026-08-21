@@ -44,6 +44,18 @@ COPY --from=deps --chown=node:node /rds-ca-bundle.pem ./rds-ca-bundle.pem
 COPY --chown=node:node package.json ./
 COPY --chown=node:node src ./src
 
+# npm is never used at runtime - only `node src/index.js` runs in this
+# stage. Removing it strips npm's own internally-bundled dependencies from
+# the shipped image too, which is what a real Trivy finding (CVE-2026-12151,
+# undici) turned out to actually be: `npm ls undici` against this project's
+# own package-lock.json comes back completely empty, so the vulnerable copy
+# Trivy found wasn't anything this project depends on at all - it was npm's
+# own internal tooling dependency, bundled into every node:*-alpine image
+# regardless of what the project itself needs. Smaller image, smaller
+# attack surface, and one less thing whose vulnerabilities aren't ours to
+# track via npm audit in the first place.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
 USER node
 
 EXPOSE 3000
