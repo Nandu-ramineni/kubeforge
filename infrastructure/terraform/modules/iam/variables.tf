@@ -21,6 +21,18 @@ variable "github_repo" {
   default     = ""
 }
 
+variable "github_owner_id" {
+  description = "Numeric GitHub owner/org ID - only needed if the repo uses GitHub's immutable OIDC subject claim format (automatic for repos created after July 15, 2026, or opted in for older repos). Find it by decoding a real OIDC token from a workflow run, or via: gh api repos/<org>/<repo>/actions/oidc/customization/sub"
+  type        = string
+  default     = ""
+}
+
+variable "github_repo_id" {
+  description = "Numeric GitHub repository ID - see github_owner_id."
+  type        = string
+  default     = ""
+}
+
 variable "ecr_repository_arns" {
   description = "ECR repository ARNs the GitHub Actions role is allowed to push to"
   type        = list(string)

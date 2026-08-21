@@ -33,6 +33,8 @@ module "iam" {
   enable_github_oidc  = var.enable_github_oidc
   github_org          = var.github_org
   github_repo         = var.github_repo
+  github_owner_id     = var.github_owner_id
+  github_repo_id      = var.github_repo_id
   ecr_repository_arns = module.ecr.repository_arns
   tags                = local.common_tags
 }

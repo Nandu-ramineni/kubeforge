@@ -53,6 +53,18 @@ variable "github_repo" {
   default     = "kubeforge"
 }
 
+variable "github_owner_id" {
+  description = "Numeric GitHub owner ID - only needed for repos using GitHub's immutable OIDC subject format. See modules/iam/variables.tf for how to find it."
+  type        = string
+  default     = ""
+}
+
+variable "github_repo_id" {
+  description = "Numeric GitHub repository ID - see github_owner_id."
+  type        = string
+  default     = ""
+}
+
 # --- EKS ---
 variable "kubernetes_version" {
   type    = string

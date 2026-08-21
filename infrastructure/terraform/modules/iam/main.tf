@@ -101,14 +101,33 @@ resource "aws_iam_role" "github_actions_ecr_push" {
         # Scoped to this specific repo - any branch/tag/PR from
         # github_org/github_repo can assume this role, but nothing else can.
         # Tightened further to specific branches/environments in Phase 16.
+        #
+        # Matches BOTH possible subject-claim formats GitHub can issue.
+        # GitHub rolled out "immutable subject claims" for OIDC tokens on
+        # July 15, 2026: repos created after that date automatically get
+        # repo:OWNER@OWNER-ID/REPO@REPO-ID:ref:... instead of the classic
+        # repo:OWNER/REPO:ref:... - discovered the hard way via a real
+        # sts:AssumeRoleWithWebIdentity failure against a repo created after
+        # that cutoff, then confirmed against GitHub's own documentation.
+        # There's no reliable way to know in advance which format a given
+        # repo will actually use, so both patterns are matched - the one
+        # that doesn't apply just never matches anything, harmlessly.
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:*"
+          "token.actions.githubusercontent.com:sub" = local.github_oidc_subject_patterns
         }
       }
     }]
   })
 
   tags = var.tags
+}
+
+locals {
+  github_oidc_subject_patterns = compact([
+    "repo:${var.github_org}/${var.github_repo}:*",
+    (var.github_owner_id != "" && var.github_repo_id != "") ?
+    "repo:${var.github_org}@${var.github_owner_id}/${var.github_repo}@${var.github_repo_id}:*" : ""
+  ])
 }
 
 # Least-privilege: push/pull to ECR only, nothing else. Explicitly NOT

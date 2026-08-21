@@ -105,7 +105,7 @@ jobs:
         run: |
           JWT=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
-          echo "$JWT" | cut -d '.' -f2 | base64 -d 2>/dev/null | jq '{sub, aud, repository, repository_owner, ref, actor}'
+          echo "$JWT" | cut -d '.' -f2 | base64 -d 2>/dev/null | jq '{sub, aud, repository, repository_owner, repository_id, repository_owner_id, ref, actor}'
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
