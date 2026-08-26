@@ -13,6 +13,11 @@ kind: PodMonitor
 metadata:
   name: {{ $name }}
   namespace: {{ $.Values.namespace }}
+  labels:
+    # This label is what makes Prometheus Operator actually pick this up -
+    # see values.yaml's monitoring.prometheusReleaseLabel comment for the
+    # real failure this fixes.
+    release: {{ $.Values.monitoring.prometheusReleaseLabel }}
 spec:
   selector:
     matchLabels:

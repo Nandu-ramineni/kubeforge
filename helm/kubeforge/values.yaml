@@ -45,6 +45,19 @@ networkPolicy:
   enabled: true
   vpcCidr: "10.0.0.0/16"
 
+# kube-prometheus-stack's Prometheus only scrapes ServiceMonitors/PodMonitors
+# carrying this exact label by default - a deliberate safeguard so it
+# doesn't accidentally pick up unrelated monitors from every other Helm
+# chart in the cluster. Without it, our PodMonitors exist as Kubernetes
+# objects but Prometheus Operator never registers them as scrape targets at
+# all (confirmed the hard way: Prometheus's own /targets page showed every
+# bundled serviceMonitor/... target, but zero podMonitor/kubeforge/...
+# entries - not failing, just entirely invisible to it). This value must
+# match whatever release name kube-prometheus-stack was actually installed
+# under (docs/observability.md's install command uses "kube-prometheus-stack").
+monitoring:
+  prometheusReleaseLabel: "kube-prometheus-stack"
+
 # One entry per service. templates/deployment.yaml and templates/rollout.yaml
 # both range over this map (Deployment for useRollout:false, Rollout for
 # useRollout:true) via a shared pod-spec named template
