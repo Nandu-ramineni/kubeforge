@@ -35,6 +35,9 @@ FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
+# See services/worker/Dockerfile for the full explanation.
+RUN apk update && apk upgrade --no-cache
+
 # node:*-alpine ships a non-root "node" user (uid 1000) out of the box -
 # reuse it rather than defining a new one. Running as root inside a
 # container that only ever runs one process buys nothing and turns any

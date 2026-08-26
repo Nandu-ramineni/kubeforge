@@ -11,6 +11,9 @@ FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
+# See services/worker/Dockerfile for the full explanation.
+RUN apk update && apk upgrade --no-cache
+
 COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node package.json ./
 COPY --chown=node:node src ./src
