@@ -1,0 +1,17 @@
+# kube-prometheus-stack's Grafana runs with a sidecar that watches for
+# ConfigMaps carrying this exact label across the cluster and auto-loads
+# them as dashboards - no manual "import dashboard" click-through needed.
+# This is the standard, well-established convention for that chart
+# specifically (not a general Kubernetes/Grafana thing) - worth knowing the
+# label is chart-specific if this ever gets ported to a different Grafana
+# install method.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubeforge-api-dashboard
+  namespace: {{ .Values.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  api-dashboard.json: |
+    {{- .Files.Get "dashboards/api-dashboard.json" | nindent 4 }}

@@ -1,0 +1,26 @@
+# PodMonitor rather than ServiceMonitor - Prometheus Operator's ServiceMonitor
+# CRD discovers scrape targets via a Service's Endpoints, but worker
+# deliberately has no Service at all (see templates/deployment.yaml's
+# comment - nothing routes to it, so a Service would exist purely to satisfy
+# a monitoring tool, which was flagged all the way back in Phase 4 as the
+# reason to reach for PodMonitor here instead). PodMonitor selects pods
+# directly by label, no Service required - works identically for api (which
+# does have a Service, for real traffic) and worker (which doesn't).
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.metrics.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+---
+{{- end }}
+{{- end }}

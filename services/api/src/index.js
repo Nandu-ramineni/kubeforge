@@ -3,6 +3,7 @@ import pinoHttp from 'pino-http';
 import config from './config.js';
 import logger from './logger.js';
 import requestId from './middleware/requestId.js';
+import metricsMiddleware from './middleware/metricsMiddleware.js';
 import errorHandler from './middleware/errorHandler.js';
 import healthRoutes from './routes/health.js';
 import taskRoutes from './routes/tasks.js';
@@ -15,6 +16,7 @@ async function main() {
   const app = express();
 
   app.use(requestId);
+  app.use(metricsMiddleware);
   app.use(
     pinoHttp({
       logger,

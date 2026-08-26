@@ -36,7 +36,8 @@ spec:
         capabilities:
           drop: ["ALL"]
       ports:
-        - containerPort: {{ .svc.port }}
+        - name: metrics
+          containerPort: {{ .svc.port }}
       env:
         {{- range $key, $value := .svc.extraEnv }}
         - name: {{ $key }}

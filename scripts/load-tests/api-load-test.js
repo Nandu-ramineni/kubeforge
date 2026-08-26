@@ -1,16 +1,3 @@
-// Real load test against the real ALB - not a synthetic benchmark. Exercises
-// the exact path api's HPA (helm/kubeforge/templates/hpa.yaml) is watching:
-// api pod CPU. Each iteration does a real Postgres write (POST /api/tasks,
-// which also publishes to RabbitMQ and gets picked up by worker) and a real
-// Postgres read (GET /api/tasks) - not a static endpoint, so this reflects
-// actual request cost, not an artificially cheap health-check ping.
-//
-// Staged ramp rather than a flat load level on purpose: a flat 100 VUs from
-// second zero doesn't tell you AT WHAT POINT scaling kicks in, just whether
-// it eventually does. Ramping up gradually is what makes it possible to
-// correlate "requests/sec crossed X" with "HPA scaled to Y pods" in the
-// results afterward - see docs/autoscaling.md for how to read this
-// alongside `kubectl get hpa -w` output collected during the same run.
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 

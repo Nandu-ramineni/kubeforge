@@ -68,6 +68,8 @@ services:
       minReplicas: 2
       maxReplicas: 10
       targetCPUUtilizationPercentage: 70
+    metrics:
+      enabled: true # /metrics is real now - see services/api/src/middleware/metricsMiddleware.js
     extraEnv:
       PORT: "3000"
     resources:
@@ -97,6 +99,8 @@ services:
       minReplicas: 2
       maxReplicas: 10
       targetCPUUtilizationPercentage: 70
+    metrics:
+      enabled: true # already properly wired since Phase 2 - startTimer/endTimer on every processed task
     extraEnv:
       HEALTH_PORT: "3001"
     resources:
