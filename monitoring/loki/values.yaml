@@ -1,0 +1,74 @@
+# Installed via:
+#   helm repo add grafana-community https://grafana-community.github.io/helm-charts
+#   helm repo update
+#   helm install loki grafana-community/loki -n monitoring -f monitoring/loki/values.yaml
+#
+# Repo choice matters here: as of March 16, 2026, the Loki Helm chart for
+# OSS users forked to grafana-community/helm-charts. The original
+# grafana/helm-charts repo now only maintains this chart for paid Grafana
+# Enterprise Logs customers - using that repo today would mean installing
+# something no longer intended for a project like this one. Checked this
+# directly rather than trust older tutorials, most of which still reference
+# the pre-fork repo.
+#
+# SingleBinary mode, not SimpleScalable: SimpleScalable is itself being
+# deprecated, and its default topology is 3 read + 3 write + 3 backend pods
+# (9+ pods before storing a single log line) - built for scale this project
+# doesn't have. SingleBinary runs every Loki component in one process,
+# officially recommended for "a few tens of GB/day," which comfortably
+# covers this project's actual log volume.
+#
+# Filesystem storage, not S3: the chart's bundled MinIO subchart is being
+# removed entirely on 2026-10-31, and configuring real external S3 storage
+# for this specific, fast-changing chart version involves enough
+# schema-specific detail (schemaConfig, storage_config, named stores) that
+# getting it wrong silently was a real risk without a live cluster to test
+# against. Filesystem storage (backed by a PVC) is simpler, has no
+# deprecation timeline, and is entirely sufficient to prove out real log
+# collection and search now. Migrating to S3-backed storage later is a
+# legitimate, contained follow-up - not required to satisfy what this phase
+# actually needs to demonstrate.
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  limits_config:
+    retention_period: 168h # 7 days - enough to investigate a recent incident without the PVC growing unbounded
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 10Gi
+
+# No gateway (nginx in front of Loki) - only useful for read/write component
+# separation in SimpleScalable/microservices mode. Grafana and Alloy talk to
+# the single Loki pod directly.
+gateway:
+  enabled: false
+
+# Not using the bundled subchart at all - see the filesystem-storage
+# reasoning above.
+minio:
+  enabled: false
+
+# This chart's own test canary (writes + reads back a synthetic log line on
+# an interval, to prove the write path actually works end-to-end) - useful
+# as an independent, automatic health signal separate from our own app logs.
+monitoring:
+  lokiCanary:
+    enabled: true

@@ -1,0 +1,57 @@
+// Installed via:
+//   helm repo add grafana https://grafana.github.io/helm-charts
+//   helm repo update
+//   helm install alloy grafana/alloy -n monitoring \
+//     --set-file alloy.configMap.content=monitoring/alloy/config.alloy
+//
+// Alloy, not Promtail: Promtail reached end-of-life March 2, 2026 - no
+// further security or bug fixes. Alloy is Grafana's current, actively
+// developed log/metrics/trace collector, built on the OpenTelemetry
+// Collector. Note this chart stays on the ORIGINAL grafana/helm-charts repo
+// - only the Loki chart itself moved to grafana-community; easy to get
+// wrong by assuming both charts moved together.
+//
+// This uses loki.source.kubernetes, which reads pod logs via the
+// Kubernetes API server directly (not by tailing files on each node) -
+// simpler permissions model, no hostPath volume mounts needed.
+
+discovery.kubernetes "pods" {
+  role = "pod"
+}
+
+discovery.relabel "pods" {
+  targets = discovery.kubernetes.pods.targets
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app"]
+    target_label  = "app"
+  }
+}
+
+loki.source.kubernetes "pods" {
+  targets    = discovery.relabel.pods.output
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    // Matches the Loki Service name Helm creates for a release literally
+    // named "loki" in SingleBinary mode - confirm with
+    // `kubectl get svc -n monitoring | grep loki` before relying on this,
+    // and adjust if your actual Service name differs (e.g. if you installed
+    // under a different release name).
+    url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+  }
+}

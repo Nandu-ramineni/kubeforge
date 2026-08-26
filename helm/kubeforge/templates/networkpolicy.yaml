@@ -51,8 +51,9 @@ spec:
     matchLabels:
       app: {{ $name }}
   policyTypes: ["Ingress", "Egress"]
-  {{- if $svc.publicIngress }}
+  {{- if or $svc.publicIngress $svc.metrics.enabled }}
   ingress:
+    {{- if $svc.publicIngress }}
     # Traffic from the ALB arrives at the pod's IP via the VPC CNI - it does
     # NOT come from another pod, so this can't be scoped with a podSelector
     # the way the redis policy above is. This is intentionally open on the
@@ -66,6 +67,24 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $svc.port }}
+    {{- end }}
+    {{- if $svc.metrics.enabled }}
+    # Prometheus (Phase 11) runs in the monitoring namespace and scrapes
+    # this service's /metrics on the same port real traffic uses - needed
+    # as its OWN explicit rule, not just implied by publicIngress above,
+    # because worker has metrics.enabled but NOT publicIngress (nothing
+    # calls worker directly). Without this, enabling real NetworkPolicy
+    # enforcement (see modules/eks's vpc_cni addon) would have silently
+    # broken Prometheus's ability to scrape worker specifically, the moment
+    # enforcement actually started being real instead of inert.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: {{ $svc.port }}
+    {{- end }}
   {{- end }}
   egress:
     # DNS - every pod needs this for basic service discovery (resolving

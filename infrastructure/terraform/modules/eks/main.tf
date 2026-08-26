@@ -73,3 +73,33 @@ resource "aws_eks_node_group" "this" {
     ignore_changes = [scaling_config[0].desired_size] # let the Autoscaler (Phase 10) own this after initial creation
   }
 }
+
+# EKS auto-creates a default vpc-cni add-on when the cluster is created,
+# with NetworkPolicy enforcement OFF - confirmed via AWS's own announcement:
+# "Starting with VPC CNI v1.14, NetworkPolicy support is available... but
+# turned off by default at launch." This means every NetworkPolicy object
+# this project has applied since Phase 9 has been syntactically valid and
+# accepted by the API server, but never actually enforced by the data plane
+# - a real gap, discovered while checking whether Phase 12's log collector
+# would be blocked by them, not a hypothetical concern.
+#
+# resolve_conflicts_on_create = OVERWRITE is what lets Terraform "adopt"
+# the add-on EKS already auto-created, rather than erroring the way the
+# GitHub OIDC provider did back in Phase 5 (that resource has no equivalent
+# adoption mechanism and needed a manual `terraform import` instead - this
+# one is designed for exactly this situation).
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "vpc-cni"
+
+  configuration_values = jsonencode({
+    enableNetworkPolicy = "true"
+  })
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = var.tags
+
+  depends_on = [aws_eks_node_group.this]
+}

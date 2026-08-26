@@ -1,0 +1,26 @@
+# Same auto-discovery mechanism as templates/grafana-dashboard.yaml (Phase
+# 11), but datasources and dashboards are SEPARATE sidecar watchers in
+# kube-prometheus-stack - grafana.sidecar.datasources.enabled has to be set
+# too, it isn't implied by dashboards.enabled. If Loki doesn't show up as a
+# datasource in Grafana, this is the first thing to check:
+#   helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     -n monitoring --reuse-values \
+#     --set grafana.sidecar.datasources.enabled=true \
+#     --set grafana.sidecar.datasources.searchNamespace=ALL
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubeforge-loki-datasource
+  namespace: {{ .Values.namespace }}
+  labels:
+    grafana_datasource: "1"
+data:
+  loki-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        access: proxy
+        # See monitoring/alloy/config.alloy's comment on this same URL -
+        # verify the actual Service name/namespace matches your install.
+        url: http://loki.monitoring.svc.cluster.local:3100
