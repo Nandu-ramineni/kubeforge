@@ -55,6 +55,32 @@ singleBinary:
     enabled: true
     size: 10Gi
 
+# The chart defaults to standing up dedicated memcached deployments for
+# chunk/results caching, sized for real production log volumes - confirmed
+# the hard way: chunksCache alone requested ~9.6Gi memory, more than an
+# entire t3.medium node has (4Gi total). No amount of additional nodes
+# would ever fit that; it's not a capacity problem, it's a default built
+# for a scale this project doesn't operate at. SingleBinary mode's own
+# in-process caching is sufficient at this log volume - the same reasoning
+# that justified SingleBinary over SimpleScalable in the first place.
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+# The chart's own defaults have non-zero replica counts for the
+# SimpleScalable components (read/write/backend) even when deploymentMode
+# is SingleBinary - explicitly zeroing them out is required, not optional.
+# Confirmed the hard way: `helm install` rejected the values file with
+# "You have more than zero replicas configured for both the monolithic and
+# simple scalable targets" until these were added.
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
 # No gateway (nginx in front of Loki) - only useful for read/write component
 # separation in SimpleScalable/microservices mode. Grafana and Alloy talk to
 # the single Loki pod directly.

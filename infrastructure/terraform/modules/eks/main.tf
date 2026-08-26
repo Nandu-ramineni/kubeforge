@@ -94,6 +94,19 @@ resource "aws_eks_addon" "vpc_cni" {
 
   configuration_values = jsonencode({
     enableNetworkPolicy = "true"
+    # Confirmed the hard way, in Phase 12: t3.medium's default max-pods
+    # ceiling (17, under the classic ENI+secondary-IP allocation model) was
+    # hit by a DaemonSet pod, on a cluster that had accumulated pods across
+    # 12 phases. Prefix delegation raises that ceiling substantially by
+    # having each ENI claim a /28 block of IPs instead of individual ones.
+    # IMPORTANT: this only affects NODES THAT BOOT AFTER this setting takes
+    # effect - AWS's bootstrap script calculates --max-pods once, at boot
+    # time, based on whether prefix delegation was active then. Existing
+    # nodes need to be replaced once to pick this up; it doesn't apply
+    # retroactively to already-running nodes.
+    env = {
+      ENABLE_PREFIX_DELEGATION = "true"
+    }
   })
 
   resolve_conflicts_on_create = "OVERWRITE"

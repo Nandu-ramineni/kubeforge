@@ -125,6 +125,44 @@ module "irsa_cluster_autoscaler" {
   tags = local.common_tags
 }
 
+# EBS CSI driver - confirmed the hard way, in Phase 12, that this cluster
+# had NO default StorageClass at all: every phase up to this point only
+# ever needed RDS, Redis, or ephemeral storage, so the gap went unnoticed
+# until Loki's PVC got stuck permanently Pending with "pod has unbound
+# immediate PersistentVolumeClaims. not found". Unlike modules/eks's
+# vpc_cni addon, this one genuinely needs its own IRSA role - the node
+# role alone isn't sufficient/appropriate for EC2 volume management
+# permissions (CreateVolume, AttachVolume, DeleteVolume), and scoping
+# that to a dedicated role instead of broadening the shared node role
+# matches the least-privilege pattern used for every other addon so far.
+# AWS publishes an official managed policy for this one, unlike Cluster
+# Autoscaler's custom policy above.
+module "irsa_ebs_csi_driver" {
+  source = "../../modules/irsa"
+
+  name                 = "${local.name}-ebs-csi-driver"
+  oidc_provider_arn    = module.eks.oidc_provider_arn
+  oidc_provider_url    = module.eks.oidc_provider_url
+  namespace            = "kube-system"
+  # This exact service account name is fixed by the EBS CSI driver itself,
+  # not a name we chose - both the EKS-addon and Helm-chart install methods
+  # use this same, unchanging convention.
+  service_account_name = "ebs-csi-controller-sa"
+  policy_arn           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  tags                 = local.common_tags
+}
+
+resource "aws_eks_addon" "ebs_csi_driver" {
+  cluster_name              = module.eks.cluster_name
+  addon_name                = "aws-ebs-csi-driver"
+  service_account_role_arn  = module.irsa_ebs_csi_driver.role_arn
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = local.common_tags
+}
+
 # S3 bucket names are globally unique across ALL AWS accounts - suffixing
 # with the account ID avoids a name collision with someone else's bucket
 # without you having to hand-pick a unique name yourself.

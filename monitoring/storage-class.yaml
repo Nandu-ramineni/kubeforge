@@ -1,0 +1,23 @@
+# The default `gp2` StorageClass EKS creates out of the box uses the legacy
+# in-tree provisioner (kubernetes.io/aws-ebs), removed from Kubernetes core
+# since v1.23 - it exists as an object but nothing has provisioned anything
+# with it in years. Confirmed the hard way: Loki's PVC stayed Pending even
+# after the EBS CSI driver was healthy, because it was never the CSI
+# driver's problem to begin with - no StorageClass using the real
+# provisioner (ebs.csi.aws.com) existed at all.
+#
+# One-time kubectl apply, not part of the Helm chart or Argo CD sync -
+# this is cluster-level infrastructure, same category as the CRDs installed
+# by Argo Rollouts/kube-prometheus-stack, not application config.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+parameters:
+  type: gp3

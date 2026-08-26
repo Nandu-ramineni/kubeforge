@@ -25,6 +25,7 @@ output "cluster_autoscaler_role_arn" {
   description = "Set as eks.amazonaws.com/role-arn on the cluster-autoscaler ServiceAccount when installing via Helm"
 }
 
+
 output "vpc_id_for_lb_controller" {
   value       = module.vpc.vpc_id
   description = "Passed as --set vpcId=... in the AWS Load Balancer Controller Helm install"
