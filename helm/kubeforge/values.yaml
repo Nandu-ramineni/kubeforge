@@ -123,6 +123,8 @@ services:
       minReplicas: 2
       maxReplicas: 10
       targetCPUUtilizationPercentage: 70
+    metrics:
+      enabled: false # no /metrics endpoint - frontend has no application-level metrics of its own to expose
     extraEnv:
       PORT: "3002"
     resources:
